@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>箱を落とす - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>箱を落とす</h1><p>以下の枠線内をタッチすることで、タッチした座標に赤い矩形を生成します。
+生成された矩形は衝突判定と物理挙動を持っていて、重力に従って下へ移動していきます。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="box2d/hello-box2d/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="box2d/hello-box2d/hello-box2d.zip" download="hello-box2d.zip">ダウンロード</a>
+</div>
+
+<h2>動かし方</h2><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox .</code></pre>
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+var box2d = require(&quot;@akashic-extension/akashic-box2d&quot;);
+
+/** 物理世界のプロパティ */
+var worldProperty = {
+  gravity: [0.0, 9.8], // 重力の方向（m/s^2）
+  scale: 50, // スケール（pixel/m）
+  sleep: true // 停止した物体を演算対象としないかどうか
+};
+/** 物理エンジンの世界 */
+var physics = new box2d.Box2D(worldProperty);
+
+/** 矩形の物理定義 */
+var rectPhysics = {
+  /** 物理挙動 */
+  body: physics.createBodyDef({
+    type: box2d.BodyType.Dynamic // 自由に動ける物体
+  }),
+  /** 物理性質 */
+  fixture: physics.createFixtureDef({
+    density: 1.0, // 密度
+    friction: 0.5, // 摩擦係数
+    restitution: 0.3, // 反発係数
+    shape: physics.createRectShape(1.0 * worldProperty.scale, 1.0 * worldProperty.scale) // 衝突判定の形（1m × 1m の矩形）
+  })
+};
+
+function main() {
+  var scene = new g.Scene({ game: g.game });
+
+  scene.loaded.add(function() {
+    // タッチされた座標に重力に従う矩形を生成する
+    scene.pointDownCapture.add(function(event) {
+      // 表示用の矩形（1m × 1m）を生成
+      var box = new g.FilledRect({
+        scene: scene,
+        width: 1.0 * worldProperty.scale,
+        height: 1.0 * worldProperty.scale,
+        cssColor: &quot;crimson&quot;
+      });
+      box.x = event.point.x - box.width / 2;
+      box.y = event.point.y - box.height / 2;
+      scene.append(box);
+      // 矩形の物理実体を生成
+      physics.createBody(box, rectPhysics.body, rectPhysics.fixture);
+    });
+
+    scene.update.add(function() {
+      // 物理エンジンの世界をすすめる
+      // ※ step関数の引数は秒数なので、1フレーム分の時間（1.0 / g.game.fps）を指定する
+      physics.step(1.0 / g.game.fps);
+    });
+  });
+
+  g.game.pushScene(scene);
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

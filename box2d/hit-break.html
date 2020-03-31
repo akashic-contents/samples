@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>ぶつかると散る - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>ぶつかると散る</h1><p>以下の枠線内でタッチされた場所の下部より、赤い箱が上に打ち出されます。
+箱同士が衝突すると、斜め 4 方向へ箱が分裂して飛び散ります。
+左右に少しずらして 4 個前後、箱を打ち上げると綺麗に散らかります。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="box2d/hit-break/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="box2d/hit-break/hit-break.zip" download="hit-break.zip">ダウンロード</a>
+</div>
+
+<h2>動かし方</h2><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox .</code></pre>
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+
+var box2d = require(&quot;@akashic-extension/akashic-box2d&quot;);
+
+// 2次元ベクトル
+var b2Vec2 = box2d.Box2DWeb.Common.Math.b2Vec2;
+
+// 斜め方向のベクトル
+var directions = [
+  new b2Vec2(-1, -1), // 左上
+  new b2Vec2(1, -1), // 右上
+  new b2Vec2(-1, 1), // 左下
+  new b2Vec2(1, 1) // 右下
+];
+
+/** 物理世界のプロパティ */
+var worldProperty = {
+  gravity: [0.0, 9.8], // 重力の方向（m/s^2）
+  scale: 50, // スケール（pixel/m）
+  sleep: true // 停止した物体を演算対象としないかどうか
+};
+/** 物理エンジンの世界 */
+var physics = new box2d.Box2D(worldProperty);
+
+/** 衝突判定を持つ箱のリスト */
+var boxList = [];
+/** 衝突した物体のIDリスト */
+var contactIDList = [];
+
+/** 衝突イベントのリスナ */
+var contactListener = new box2d.Box2DWeb.Dynamics.b2ContactListener();
+// 衝突開始時のイベントリスナを設定
+contactListener.BeginContact = function(contact) {
+  // physics.createBodyDefにuserDataを指定していない場合は、
+  // userDataにg.E.idが設定されるので、IDの組を保存しておく
+  var a = contact
+    .GetFixtureA()
+    .GetBody()
+    .GetUserData();
+  var b = contact
+    .GetFixtureB()
+    .GetBody()
+    .GetUserData();
+  contactIDList.push({ a: a, b: b });
+};
+// イベントリスナを設定
+physics.world.SetContactListener(contactListener);
+
+function main() {
+  var scene = new g.Scene({ game: g.game });
+
+  scene.loaded.add(function() {
+    scene.pointDownCapture.add(function(event) {
+      // タッチされた場所の画面下から箱を飛ばす
+      var box = createBox(scene, createBoxParameter(1.0, 1.0, &quot;crimson&quot;));
+      boxList.push(box);
+      // ※ 表示はbox2dのbodyの座標に同期するので、box2dの座標だけ書き換える
+      box.b2body.SetPosition(physics.vec2(event.point.x, g.game.height));
+      // 箱に上向きの瞬間的な力を加える
+      box.b2body.ApplyImpulse(
+        new b2Vec2(0, -13), // 加える力ベクトル
+        box.b2body.GetPosition() // 力点
+      );
+    });
+
+    scene.update.add(function() {
+      // 衝突した箱を4分割して斜めに飛ばす
+      while (0 &lt; contactIDList.length) {
+        var contactID = contactIDList.pop();
+        for (var i = 0; i &lt; boxList.length; ++i) {
+          var box = boxList[i];
+          // 衝突した箱かどうかの判定
+          if (box.entity.id === contactID.a || box.entity.id === contactID.b) {
+            // 大きさは衝突した箱の4分の1
+            var size = physics.vec2(box.entity.width, box.entity.height);
+            size.Multiply(0.5);
+
+            // 処理落ちしないように一定の大きさで分裂をやめる
+            if (size.x &lt; 0.1) {
+              break;
+            }
+
+            for (var j = 0; j &lt; 4; ++j) {
+              var dir = directions[j];
+
+              var miniBox = createBox(scene, createBoxParameter(size.x, size.y, &quot;royalblue&quot;));
+              // 斜めに少しずらして配置する
+              var pos = box.b2body.GetPosition().Copy();
+              pos.Add(dir);
+              miniBox.b2body.SetPosition(pos);
+              // 分裂前の箱の速度を引き継ぐ
+              miniBox.b2body.SetLinearVelocity(box.b2body.GetLinearVelocity());
+              // 斜め方向に加速させる
+              miniBox.b2body.ApplyImpulse(dir, miniBox.b2body.GetPosition());
+
+              boxList.push(miniBox);
+            }
+
+            removeBox(box);
+            --i; // boxListから要素を削除した分、indexを前に詰める
+          }
+        }
+      }
+
+      // 物理エンジンの世界をすすめる
+      // ※ step関数の引数は秒数なので、1フレーム分の時間（1.0 / g.game.fps）を指定する
+      physics.step(1.0 / g.game.fps);
+    });
+  });
+
+  g.game.pushScene(scene);
+}
+
+/**
+ * 箱の生成パラメータを生成する
+ * @param {number} width 横幅（m）
+ * @param {number} height 縦幅（m）
+ * @param {string} color 描画色
+ */
+function createBoxParameter(width, height, color) {
+  return {
+    /** 表示情報のパラメータ */
+    appear: {
+      width: width * worldProperty.scale,
+      height: height * worldProperty.scale,
+      cssColor: color
+    },
+    /** 物理定義 */
+    physics: {
+      /** 物理挙動 */
+      body: physics.createBodyDef({
+        type: box2d.BodyType.Dynamic // 自由に動ける物体
+      }),
+      /** 物理性質 */
+      fixture: physics.createFixtureDef({
+        density: 1.0, // 密度
+        friction: 0.5, // 摩擦係数
+        restitution: 0.3, // 反発係数
+        shape: physics.createRectShape(width * worldProperty.scale, height * worldProperty.scale) // 衝突判定の形
+      })
+    }
+  };
+}
+
+/**
+ * 衝突判定を持つ箱を生成する
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {Object} parameter 箱の生成パラメータ
+ */
+function createBox(scene, parameter) {
+  // 表示用の矩形（1m × 1m）を生成
+  var rect = new g.FilledRect({
+    scene: scene,
+    width: parameter.appear.width,
+    height: parameter.appear.height,
+    cssColor: parameter.appear.cssColor
+  });
+  scene.append(rect);
+
+  // 表示用の矩形と衝突判定を結び付けて返す
+  var box = physics.createBody(rect, parameter.physics.body, parameter.physics.fixture);
+
+  box.entity.update.add(function() {
+    // 画面外に出たら自分を削除
+    if (g.game.height + 100 &lt; box.entity.y) {
+      removeBox(box);
+    }
+  });
+
+  return box;
+}
+
+/**
+ * 箱を削除する
+ * @param {EBody} box 削除する箱
+ */
+function removeBox(box) {
+  boxList.splice(boxList.indexOf(box), 1);
+  physics.removeBody(box);
+  box.entity.destroy();
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

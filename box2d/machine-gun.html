@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>マシンガン - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>マシンガン</h1><p>以下の枠線内のタッチされた座標から銃弾が発射されます。
+画面左側をタッチしていると右側に赤い銃弾が、右側をタッチしていると左側に緑色の銃弾が発射されます。
+それぞれの銃弾は、銃弾同士と同じ色の壁には衝突せず、反対の色の壁に衝突したときのみダメージに見立てた数字が表示されます。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="box2d/machine-gun/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="box2d/machine-gun/machine-gun.zip" download="machine-gun.zip">ダウンロード</a>
+</div>
+
+<h2>動かし方</h2><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox .</code></pre>
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+
+var box2d = require(&quot;@akashic-extension/akashic-box2d&quot;);
+
+/** 2次元ベクトル */
+var b2Vec2 = box2d.Box2DWeb.Common.Math.b2Vec2;
+/** 2 × 2 行列 */
+var b2Mat22 = box2d.Box2DWeb.Common.Math.b2Mat22;
+
+/** Aグループ */
+var GROUP_A = -1;
+/** Bグループ */
+var GROUP_B = -2;
+/** 壁カテゴリ */
+var CATEGORY_BULLET = 0x0001;
+/** 壁カテゴリ */
+var CATEGORY_WALL = 0x0002;
+
+/** ダメージ描画に使用するフォント */
+var DAMAGE_FONT = new g.DynamicFont({
+  game: g.game,
+  fontFamily: g.FontFamily.Monospace,
+  size: 30
+});
+
+/** 物理世界のプロパティ */
+var worldProperty = {
+  gravity: [0.0, 0.0], // 重力の方向（m/s^2）
+  scale: 50, // スケール（pixel/m）
+  sleep: true // 停止した物体を演算対象としないかどうか
+};
+/** 物理エンジンの世界 */
+var physics = new box2d.Box2D(worldProperty);
+
+/** グループAの銃弾生成パラメータ */
+var bulletParameterA = {
+  /** 見た目情報 */
+  appear: {
+    assetId: &quot;circleA&quot;,
+    width: 0.1 * worldProperty.scale,
+    height: 0.1 * worldProperty.scale
+  },
+  /** 物理定義 */
+  physics: {
+    /** 物理挙動 */
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Dynamic // 自由に動ける物体
+    }),
+    /** 物理性質 */
+    fixture: physics.createFixtureDef({
+      density: 1.0, // 密度
+      friction: 0.3, // 摩擦係数
+      restitution: 0.7, // 反発係数
+      shape: physics.createCircleShape(0.1 * worldProperty.scale), // 衝突判定の形（直径 0.1m の円形）
+      filter: {
+        // 衝突判定のフィルタリング設定
+        // ※ 負のグループに属するオブジェクト同士は衝突しない
+        // ※ 物体のcategoryBitsとmaskBitsの論理積が真のときだけ衝突判定が行われる
+        groupIndex: GROUP_A,
+        categoryBits: CATEGORY_BULLET,
+        maskBits: CATEGORY_WALL
+      }
+    })
+  }
+};
+/** グループBの銃弾生成パラメータ */
+var bulletParameterB = {
+  appear: {
+    assetId: &quot;circleB&quot;,
+    width: 0.1 * worldProperty.scale,
+    height: 0.1 * worldProperty.scale
+  },
+  physics: {
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Dynamic
+    }),
+    fixture: physics.createFixtureDef({
+      density: 1.0,
+      friction: 0.3,
+      restitution: 0.7,
+      shape: physics.createCircleShape(0.1 * worldProperty.scale),
+      filter: {
+        groupIndex: GROUP_B,
+        categoryBits: CATEGORY_BULLET,
+        maskBits: CATEGORY_WALL
+      }
+    })
+  }
+};
+/** グループAの壁生成パラメータ */
+var wallParameterA = {
+  appear: {
+    width: 0.3 * worldProperty.scale,
+    height: g.game.height / 3,
+    cssColor: &quot;crimson&quot;
+  },
+  physics: {
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Static // 固定されて動かない物体
+    }),
+    fixture: physics.createFixtureDef({
+      density: 1.0,
+      friction: 0.3,
+      restitution: 0.7,
+      shape: physics.createRectShape(0.3 * worldProperty.scale, g.game.height / 3),
+      filter: {
+        groupIndex: GROUP_A,
+        categoryBits: CATEGORY_WALL
+      }
+    })
+  }
+};
+/** グループBの壁生成パラメータ */
+var wallParameterB = {
+  appear: {
+    width: 0.3 * worldProperty.scale,
+    height: g.game.height / 3,
+    cssColor: &quot;teal&quot;
+  },
+  physics: {
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Static
+    }),
+    fixture: physics.createFixtureDef({
+      density: 1.0,
+      friction: 0.3,
+      restitution: 0.7,
+      shape: physics.createRectShape(0.3 * worldProperty.scale, g.game.height / 3),
+      filter: {
+        groupIndex: GROUP_B,
+        categoryBits: CATEGORY_WALL
+      }
+    })
+  }
+};
+
+/** 衝突判定を持つ銃弾のリスト */
+var bulletList = [];
+/** 衝突した物体のUserDataリスト */
+var contactDataList = [];
+
+/** 衝突イベントのリスナ */
+var contactListener = new box2d.Box2DWeb.Dynamics.b2ContactListener();
+// 衝突開始時のイベントリスナを設定
+contactListener.BeginContact = function(contact) {
+  // userDataの組を保存しておく
+  var a = contact.GetFixtureA().GetBody();
+  var b = contact.GetFixtureB().GetBody();
+
+  contactDataList.push({ a: a.GetUserData(), b: b.GetUserData() });
+};
+// イベントリスナを設定
+physics.world.SetContactListener(contactListener);
+
+function main() {
+  var scene = new g.Scene({ game: g.game, assetIds: [&quot;circleA&quot;, &quot;circleB&quot;] });
+
+  scene.loaded.add(function() {
+    var gameCenter = calcCenter(g.game);
+    var position = gameCenter.Copy();
+    // 壁Aを生成
+    var wallA = createRect(scene, wallParameterA);
+    position.x -= 1.0;
+    wallA.b2body.SetPosition(position);
+    // 壁Bを生成
+    var wallB = createRect(scene, wallParameterB);
+    position.x += 2.0;
+    wallB.b2body.SetPosition(position);
+
+    /** 画面をタッチしているか */
+    var touch = false;
+    /** タッチしている座標 */
+    var touchPosition;
+
+    // 画面をタッチしている間、タッチ座標を追う
+    scene.pointDownCapture.add(function(event) {
+      touch = true;
+      touchPosition = physics.vec2(event.point.x, event.point.y);
+    });
+    scene.pointMoveCapture.add(function(event) {
+      var delta = physics.vec2(event.prevDelta.x, event.prevDelta.y);
+      touchPosition.Add(delta);
+    });
+    scene.pointUpCapture.add(function() {
+      touch = false;
+    });
+
+    /** フレームカウント（銃弾の発射間隔に使用） */
+    var frameCount = 0;
+    scene.update.add(function() {
+      // 画面をタッチしている間、銃弾を発射
+      if (touch) {
+        // 画面左側をタッチしている場合はグループAの銃弾、右側はグループBの銃弾
+        if (touchPosition.x &lt; gameCenter.x) {
+          // 1 / 3 Fで銃弾発射
+          if (2 &lt;= frameCount++) {
+            frameCount = 0;
+            shootA(scene, touchPosition);
+          }
+        } else {
+          // 1 / 6 Fで銃弾発射
+          if (5 &lt;= frameCount++) {
+            frameCount = 0;
+            shootB(scene, touchPosition);
+          }
+        }
+      }
+
+      // 衝突した銃弾を処理する
+      while (0 &lt; contactDataList.length) {
+        var data = contactDataList.pop();
+        for (var i = 0; i &lt; bulletList.length; ++i) {
+          var bullet = bulletList[i];
+          var bulletData = bullet.b2body.GetUserData();
+          // UserDataから衝突した銃弾を特定する
+          if (data.a.id === bullet.entity.id || data.b.id === bullet.entity.id) {
+            var position = bullet.b2body.GetPosition().Copy();
+            position.Multiply(worldProperty.scale);
+
+            // グループによってダメージ表示の色を変更
+            var filter = bullet.b2body.GetFixtureList().GetFilterData();
+            var color = filter.groupIndex === GROUP_A ? &quot;crimson&quot; : &quot;teal&quot;;
+            scene.append(createDamage(scene, position, bulletData.damage, color));
+
+            removeBullet(bullet);
+            --i; // 消した分インデックスを詰める
+          }
+        }
+      }
+
+      // 物理エンジンの世界をすすめる
+      // ※ step関数の引数は秒数なので、1フレーム分の時間（1.0 / g.game.fps）を指定する
+      physics.step(1.0 / g.game.fps);
+    });
+  });
+
+  g.game.pushScene(scene);
+}
+
+/**
+ * グループAの銃弾を発射します
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {b2Vec2} position 発射座標
+ */
+function shootA(scene, position) {
+  var bullet = createBullet(scene, bulletParameterA);
+  bullet.b2body.SetPosition(position);
+
+  /** 発射制度 */
+  var accuracy = 10;
+  /** 発射角度（右から -10° ~ 10°） */
+  var angle = g.game.random.generate() * accuracy * 2 - accuracy;
+  /** 発射の瞬間の力 */
+  var impulse = new b2Vec2(0.1, 0);
+  impulse.MulM(b2Mat22.FromAngle((angle / 180) * Math.PI));
+
+  // 発射
+  bullet.b2body.ApplyImpulse(impulse, bullet.b2body.GetPosition());
+}
+/**
+ * グループBの銃弾を発射します
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {b2Vec2} position 発射座標
+ */
+function shootB(scene, position) {
+  var bullet = createBullet(scene, bulletParameterB);
+  bullet.b2body.SetPosition(position);
+  /** 発射制度 */
+  var accuracy = 3;
+  /** 発射角度（右から -3° ~ 3°） */
+  var angle = g.game.random.generate() * accuracy * 2 - accuracy;
+  /** 発射の瞬間の力 */
+  var impulse = new b2Vec2(-0.2, 0);
+  impulse.MulM(b2Mat22.FromAngle((angle / 180) * Math.PI));
+
+  // 発射
+  bullet.b2body.ApplyImpulse(impulse, bullet.b2body.GetPosition());
+}
+
+/**
+ * 衝突判定を持つ矩形を生成する
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {Object} parameter 矩形の生成パラメータ
+ */
+function createRect(scene, parameter) {
+  // 表示用の矩形（1m × 1m）を生成
+  var rect = new g.FilledRect({
+    scene: scene,
+    width: parameter.appear.width,
+    height: parameter.appear.height,
+    cssColor: parameter.appear.cssColor
+  });
+  scene.append(rect);
+
+  // 表示用の矩形と衝突判定を結び付けて返す
+  return physics.createBody(rect, parameter.physics.body, parameter.physics.fixture);
+}
+
+/**
+ * 衝突判定を持った銃弾を生成する
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {Object} parameter 銃弾の生成パラメータ
+ */
+function createBullet(scene, parameter) {
+  // 表示用の画像を生成
+  // ※ AkashicEngineでは円を描画することができないので、画像で表現する
+  var entity = new g.Sprite({
+    scene: scene,
+    src: scene.assets[parameter.appear.assetId],
+    srcWidth: 100,
+    srcHeight: 100,
+    width: parameter.appear.width,
+    height: parameter.appear.height
+  });
+  scene.append(entity);
+
+  // 表示用の円形と衝突判定を結び付けて生成
+  var bullet = physics.createBody(entity, parameter.physics.body, parameter.physics.fixture);
+
+  /** ダメージの揺らぎ（-5.0 ~ 5.0） */
+  var rand = g.game.random.generate() * 10.0 - 5.0;
+  // ユーザーデータにダメージを付与する
+  bullet.b2body.SetUserData({
+    id: entity.id,
+    damage: 20.0 + rand
+  });
+
+  // 3 秒後には何があろうと削除
+  scene.setTimeout(removeBullet.bind(this, bullet), 3000);
+
+  bulletList.push(bullet);
+
+  return bullet;
+}
+
+/**
+ * 銃弾を削除する
+ * @param {EBody} bullet 削除する銃弾
+ */
+function removeBullet(bullet) {
+  if (bullet.entity.destroyed()) {
+    return; // 二重で削除しない
+  }
+  bulletList.splice(bulletList.indexOf(bullet), 1);
+  physics.removeBody(bullet);
+
+  bullet.entity.destroy();
+}
+
+/**
+ * ダメージ表示を生成する
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {b2Vec2} position 表示座標
+ * @param {number} damage ダメージ量
+ * @param {string} color 描画色
+ */
+function createDamage(scene, position, damage, color) {
+  var label = new g.Label({
+    scene: scene,
+    font: DAMAGE_FONT,
+    text: damage.toFixed(1).toString(),
+    fontSize: damage,
+    textColor: color,
+    x: position.x,
+    y: position.y
+  });
+  label.update.add(function() {
+    // 徐々に透過、完全に透明になったら削除
+    label.opacity -= 0.05;
+    if (label.opacity &lt;= 0.0) {
+      label.destroy();
+    }
+  });
+  return label;
+}
+
+/**
+ * オブジェクトの中心座標を計算する
+ * @param {Object} obj 中心座標を計算するオブジェクト
+ */
+function calcCenter(obj) {
+  return physics.vec2(obj.width / 2, obj.height / 2);
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

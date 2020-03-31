@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>バネ - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>バネ</h1><p>赤い箱をドラッグすると、ドラッグした座標に追従して赤い箱が動きます。
+ドラッグが解除されたとき、事前のドラッグ操作に合わせて箱を投げることができます。
+オレンジ色のオブジェクトに箱を押し付けることで、バネのような動作で押し付けた方向とは反対に箱を加速させることができます。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="box2d/spring/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="box2d/spring/spring.zip" download="spring.zip">ダウンロード</a>
+</div>
+
+<h2>動かし方</h2><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox .</code></pre>
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+
+var box2d = require(&quot;@akashic-extension/akashic-box2d&quot;);
+
+// 2次元ベクトル
+var b2Vec2 = box2d.Box2DWeb.Common.Math.b2Vec2;
+// 2×2 の行列
+var b2Mat22 = box2d.Box2DWeb.Common.Math.b2Mat22;
+
+/** 物理世界のプロパティ */
+var worldProperty = {
+  gravity: [0, 9.8], // 重力の方向（m/s^2）
+  scale: 50, // スケール（pixel/m）
+  sleep: true // 停止した物体を物理演算対象とするかどうか
+};
+/** 物理エンジンの世界 */
+var physics = new box2d.Box2D(worldProperty);
+
+/** 箱の生成パラメータ */
+var boxParameter = {
+  /** 表示情報のパラメータ */
+  appear: {
+    width: 1.0 * worldProperty.scale,
+    height: 1.0 * worldProperty.scale,
+    cssColor: &quot;crimson&quot;
+  },
+  /** 物理定義 */
+  physics: {
+    /** 物理挙動 */
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Dynamic // 自由に動ける物体
+    }),
+    /** 物理性質 */
+    fixture: physics.createFixtureDef({
+      density: 1.0, // 密度
+      friction: 0.5, // 摩擦係数
+      restitution: 0.3, // 反発係数
+      shape: physics.createRectShape(1.0 * worldProperty.scale, 1.0 * worldProperty.scale) // 衝突判定の形（1m × 1m の矩形）
+    })
+  }
+};
+/** 壁の生成パラメータ */
+var wallParameter = {
+  appear: {
+    width: 0.3 * worldProperty.scale,
+    height: g.game.height,
+    cssColor: &quot;royalblue&quot;
+  },
+  physics: {
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Static // 固定されて動かない物体
+    }),
+    fixture: physics.createFixtureDef({
+      density: 1.0,
+      friction: 0.3,
+      restitution: 0.7,
+      shape: physics.createRectShape(0.3 * worldProperty.scale, g.game.height)
+    })
+  }
+};
+/** 床・天井の生成パラメータ */
+var floorParameter = {
+  appear: {
+    width: g.game.width,
+    height: 0.3 * worldProperty.scale,
+    cssColor: &quot;royalblue&quot;
+  },
+  physics: {
+    body: physics.createBodyDef({
+      type: box2d.BodyType.Static
+    }),
+    fixture: physics.createFixtureDef({
+      density: 1.0,
+      friction: 0.3,
+      restitution: 0.7,
+      shape: physics.createRectShape(g.game.width, 0.3 * worldProperty.scale)
+    })
+  }
+};
+
+function main() {
+  var scene = new g.Scene({ game: g.game });
+
+  scene.loaded.add(function() {
+    // 左の壁を生成する
+    var leftWall = createRect(scene, wallParameter);
+    // ※ box2dの座標は実距離（単位はメートル）で指定する
+    var leftWallPos = physics.vec2(0, 0);
+    // ※ 指定された座標はオブジェクトの中心座標に設定される
+    leftWallPos.Add(calcCenter(leftWall.entity));
+    // ※ 表示はbox2dのbodyの座標に同期するので、box2dの座標だけ書き換える
+    leftWall.b2body.SetPosition(leftWallPos);
+
+    // 右の壁を生成する
+    var rightWall = createRect(scene, wallParameter);
+    var rightWallPos = physics.vec2(g.game.width - rightWall.entity.width, 0);
+    rightWallPos.Add(calcCenter(rightWall.entity));
+    rightWall.b2body.SetPosition(rightWallPos);
+
+    // 床を生成する
+    var floor = createRect(scene, floorParameter);
+    var floorPos = physics.vec2(0, g.game.height - floor.entity.height);
+    floorPos.Add(calcCenter(floor.entity));
+    floor.b2body.SetPosition(floorPos);
+
+    // 天井を生成する
+    var ceil = createRect(scene, floorParameter);
+    var ceilPos = physics.vec2(0, 0);
+    ceilPos.Add(calcCenter(ceil.entity));
+    ceil.b2body.SetPosition(ceilPos);
+
+    // バネを生成する
+    var angle = (45 / 180) * Math.PI;
+    var position = physics.vec2(g.game.width / 2, g.game.height - 100); // 下中央
+    createSpring(scene, position, 0, 50, 100);
+    position = physics.vec2(100, g.game.height - 100); // 左下
+    createSpring(scene, position, angle, 50, 100);
+    position = physics.vec2(g.game.width - 100, g.game.height - 100); // 右下
+    createSpring(scene, position, -angle, 50, 100);
+
+    // 箱を生成する
+    var box = createRect(scene, boxParameter);
+    box.b2body.SetPosition(calcCenter(g.game));
+
+    // タッチされている座標（Box2D上の絶対座標）
+    var anchor;
+
+    // 箱を触れるようにする
+    box.entity.touchable = true;
+
+    /** 箱とマウスの紐づけ */
+    var mouseJoint = null;
+
+    // 箱がタッチされたときの処理
+    box.entity.pointDown.add(function(event) {
+      // 既にマウスジョイントが生成されている場合は削除しておく
+      if (mouseJoint !== null) {
+        physics.world.DestroyJoint(mouseJoint);
+        mouseJoint = null;
+      }
+
+      // タッチした位置の絶対座標を計算する
+      // ※ Box2Dが必要とするタッチ座標は、画面左上を原点とした絶対座標。
+      // ※ g.PointDownEventから取得できる座標は、ポインティング対象からの
+      //    相対座標なので、タッチ座標に対象となるb2bodyの回転を与えた後、
+      //    b2bodyの座標を足すことで絶対座標へと変換する。
+      // ※ 回転の軸をg.Entityの中心にするため、回転の前にタッチ座標から
+      //    中心座標を引いておく。
+      anchor = physics.vec2(event.point.x, event.point.y);
+      anchor.Subtract(calcCenter(box.entity));
+      anchor.MulM(b2Mat22.FromAngle(box.b2body.GetAngle()));
+      anchor.Add(box.b2body.GetPosition());
+
+      // マウスと箱の紐づけを作成
+      var mouseJointDef = new box2d.Box2DWeb.Dynamics.Joints.b2MouseJointDef();
+      // 紐づける２つの物体
+      // ※ 今回はマウスと結び付けるので、bodyAにはworld.GetGroundBodyを指定する。
+      mouseJointDef.bodyA = physics.world.GetGroundBody();
+      mouseJointDef.bodyB = box.b2body;
+      // bodyAとbodyBの衝突判定を行うかどうか
+      mouseJointDef.collideConnected = true;
+      // マウスの引き寄せる力
+      // ※ この値が大きいと、マウスにぴったりと追従するように動き、
+      //    小さいと、ヨーヨーのように少し遅れてマウスに追従する。
+      mouseJointDef.maxForce = 1000.0 * box.b2body.GetMass();
+      // ジョイントの初期位置
+      // ※ この座標を基準にジョイントが生成されるので、以降マウスの位置を変更しても
+      //    この座標と現在のb2bodyの座標との距離が保たれるような挙動を行う。
+      mouseJointDef.target = anchor;
+
+      // マウスジョイントを生成
+      mouseJoint = physics.world.CreateJoint(mouseJointDef);
+
+      // 色を変更する
+      box.entity.cssColor = &quot;teal&quot;;
+      box.entity.modified();
+    });
+    // タッチ中の座標が移動したときの処理
+    box.entity.pointMove.add(function(event) {
+      // タッチ座標を更新する
+      anchor.Add(physics.vec2(event.prevDelta.x, event.prevDelta.y));
+      mouseJoint.SetTarget(anchor);
+    });
+    // 箱が離されたときの処理
+    box.entity.pointUp.add(function() {
+      // 箱とマウスの紐づけを解除
+      physics.world.DestroyJoint(mouseJoint);
+      mouseJoint = null;
+
+      // 色を元に戻す
+      box.entity.cssColor = &quot;crimson&quot;;
+      box.entity.modified();
+    });
+
+    scene.update.add(function() {
+      // 物理エンジンの世界をすすめる
+      // ※ step関数の引数は秒数なので、1フレーム分の時間（1.0 / g.game.fps）を指定する
+      physics.step(1.0 / g.game.fps);
+    });
+  });
+
+  g.game.pushScene(scene);
+}
+
+/**
+ * 衝突判定を持つ矩形を生成する
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {Object} parameter 矩形の生成パラメータ
+ */
+function createRect(scene, parameter) {
+  // 表示用の矩形（1m × 1m）を生成
+  var rect = new g.FilledRect({
+    scene: scene,
+    width: parameter.appear.width,
+    height: parameter.appear.height,
+    cssColor: parameter.appear.cssColor
+  });
+  scene.append(rect);
+
+  // 表示用の矩形と衝突判定を結び付けて返す
+  return physics.createBody(rect, parameter.physics.body, parameter.physics.fixture);
+}
+
+/**
+ * オブジェクトの中心座標を計算する
+ * @param {Object} obj 中心座標を計算するオブジェクト
+ */
+function calcCenter(obj) {
+  return physics.vec2(obj.width / 2, obj.height / 2);
+}
+
+/**
+ * バネを生成する
+ * @param {g.Scene} scene 描画を行うシーン
+ * @param {b2Vec2} position バネの支点となる座標
+ * @param {number} angle 上を基準としたバネの角度（radian）
+ * @param {number} speed バネの伸縮速度
+ * @param {number} force バネの押し出す力
+ */
+function createSpring(scene, position, angle, speed, force) {
+  // バネの天板を生成
+  var platform = createRect(scene, {
+    appear: {
+      width: 2.0 * worldProperty.scale,
+      height: 0.3 * worldProperty.scale,
+      cssColor: &quot;tomato&quot;
+    },
+    physics: {
+      body: physics.createBodyDef({
+        type: box2d.BodyType.Dynamic
+      }),
+      fixture: physics.createFixtureDef({
+        density: 1.0,
+        friction: 1.0,
+        restitution: 0.0,
+        shape: physics.createRectShape(2.0 * worldProperty.scale, 0.3 * worldProperty.scale)
+      })
+    }
+  });
+  platform.b2body.SetPosition(position);
+  platform.b2body.SetAngle(angle);
+
+  // 軸は上向きを基準とする
+  // ※ 軸の向きに天板が移動するのでベクトルの向きに注意
+  var axis = new b2Vec2(0, -1);
+  axis.MulM(b2Mat22.FromAngle(angle));
+
+  // ピストン運動（軸を固定したモーター運動）のジョイント設定を生成
+  var prismaticJointDef = new box2d.Box2DWeb.Dynamics.Joints.b2PrismaticJointDef();
+  prismaticJointDef.Initialize(physics.world.GetGroundBody(), platform.b2body, platform.b2body.GetPosition(), axis);
+  // ピストン移動の上限と下限を設定する
+  prismaticJointDef.enableLimit = true;
+  prismaticJointDef.lowerTranslation = -3.0;
+  prismaticJointDef.upperTranslation = 0.0;
+  // ピストン運動の動きを設定
+  // ※ motorSpeedでバネの動く速度を決定（大きすぎると天板に箱を置けなくなるので注意）
+  // ※ maxMotorForceでバネの押し出す力を決定
+  prismaticJointDef.enableMotor = true;
+  prismaticJointDef.motorSpeed = speed;
+  prismaticJointDef.maxMotorForce = force;
+
+  // ピストン運動のジョイントを生成
+  var prismaticJoint = physics.world.CreateJoint(prismaticJointDef);
+
+  platform.entity.update.add(function() {
+    // バネの長さに応じてバネの速度を変更する
+    var pos = platform.b2body.GetPosition().Copy();
+    pos.Subtract(prismaticJoint.GetAnchorA());
+    prismaticJoint.SetMotorSpeed(pos.Length() * speed);
+  });
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

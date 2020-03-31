@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>ハートを出すツール - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>ハートを出すツール</h1><p>放送画面にハートを出すツールです。
+<a href="https://dwango.github.io/niconico/jikken-housou/akashic-content2/">こちらの記事</a>で製作の流れが解説されています。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="game/heart-tool/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="game/heart-tool/heart-tool.zip" download="heart-tool.zip">ダウンロード</a>
+</div>
+
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+
+function main() {
+  var scene = new g.Scene({ game: g.game, assetIds: [&quot;heart&quot;] });
+  scene.loaded.add(function() {
+    function generateHeart(x, y) {
+      // heart変数にheart画像のSpriteを追加
+      var heart = new g.Sprite({
+        scene: scene,
+        src: scene.assets[&quot;heart&quot;]
+      });
+      // heartの位置をタッチされた場所にする。Akashicの基準座標は左上なので、タッチされた中心になるように微調整する
+      heart.moveTo(x, y);
+      // heartのtagという変数にcounterを格納
+      heart.tag = {
+        counter: 0
+      };
+      // 毎フレーム実行されるイベントであるupdateにイベントを登録
+      heart.update.add(function() {
+        // 毎フレームカウンタを追加
+        heart.tag.counter++;
+        if (heart.tag.counter &gt; 100) {
+          // カウンタが100を超えていたら削除する
+          heart.destroy();
+        } else if (heart.tag.counter &gt; 50) {
+          // カウンタが50を超えていたら半透明にしていく
+          heart.opacity = (100 - heart.tag.counter) / 50;
+          // このエンティティが変更されたという通知
+          heart.modified();
+        }
+      });
+      // 作成したheartスプライトをシーンに追加
+      scene.append(heart);
+    }
+    // pointDownCaptureトリガーに関数を登録
+    scene.pointDownCapture.add(function(e) {
+      // タッチされたらハートを中心点に配置する
+      generateHeart(e.point.x - scene.assets[&quot;heart&quot;].width / 2, e.point.y - scene.assets[&quot;heart&quot;].height / 2);
+    });
+
+    // 最初に中心にハートを出現させる
+    generateHeart(
+      g.game.width / 2 - scene.assets[&quot;heart&quot;].width / 2,
+      g.game.height / 2 - scene.assets[&quot;heart&quot;].height / 2
+    );
+  });
+  g.game.pushScene(scene);
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
