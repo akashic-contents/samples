@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>akashic-label による文字描画 - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>akashic-label による文字描画</h1><p>拡張文字描画ライブラリの akashic-label で利用できる様々な文字描画方法のサンプルです。
+Akashic Engine にあらかじめ組み込まれた文字描画機能よりも多機能で、改行・ルビなどを扱うことが出来ます。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="basic/akashic-label/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="basic/akashic-label/akashic-label.zip" download="akashic-label.zip">ダウンロード</a>
+</div>
+
+<h2>動かし方</h2><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox .</code></pre>
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+var Label = require(&quot;@akashic-extension/akashic-label&quot;).Label;
+
+function main() {
+  var scene = new g.Scene({
+    game: g.game,
+    assetIds: [&quot;font&quot;, &quot;font_glyphs&quot;] // このシーンでフォント画像とグリフ情報を利用する宣言
+  });
+
+  scene.loaded.add(function() {
+    /* ダイナミックフォントを定義する */
+    var font = new g.DynamicFont({
+      game: scene.game,
+      fontFamily: g.FontFamily.Serif, // セリフ体・明朝体のフォントファミリーを指定
+      size: 40 // 生成するフォントのピクセル数
+    });
+
+    /* フォントを元にテキストを描画する */
+    var label = new Label({
+      scene: scene,
+      text: &quot;文字を描く&quot;,
+      font: font, // あらかじめ定義したフォントデータ
+      fontSize: 40, // フォントサイズ
+      width: g.game.width, // 1行の描画幅を指定
+      x: 10, // X座標
+      y: 10 // Y座標
+    });
+    scene.append(label);
+
+    /* 改行して複数行に分割 */
+    var linesLabel = new Label({
+      scene: scene,
+      text: &quot;改行する（一行目）\n改行する（二行目）&quot;, // \rまたは\n、\r\n位置で改行
+      font: font,
+      fontSize: 40,
+      width: g.game.width,
+      x: 10,
+      y: 60
+    });
+    scene.append(linesLabel);
+
+    /* 自動で改行 */
+    var autoNewLineLabel = new Label({
+      scene: scene,
+      text: &quot;akashic-labelで自動改行&quot;,
+      font: font,
+      fontSize: 40,
+      lineBreak: true, // 自動でwidth幅で改行する（初期値はtrue）
+      width: 160,
+      x: 10,
+      y: 160
+    });
+    scene.append(autoNewLineLabel);
+
+    /* 行間余白の調整 */
+    var marginLabel = new Label({
+      scene: scene,
+      text: &quot;行間余白の調整&quot;,
+      font: font,
+      fontSize: 40,
+      width: 200,
+      lineGap: 20,
+      x: 10,
+      y: 340
+    });
+    scene.append(marginLabel);
+
+    /** ルビの利用 */
+    var rubyLabel = new Label({
+      scene: scene,
+      text: &#39;{&quot;rt&quot;:&quot;るび&quot;,&quot;rb&quot;:&quot;ruby&quot;}を使う&#39;, // 記法に従ってルビを記述
+      font: font,
+      fontSize: 40,
+      width: g.game.width,
+      x: 410,
+      y: 10
+    });
+    scene.append(rubyLabel);
+
+    /** ルビにフォントを利用 */
+
+    /* 縁取りフォントを定義する */
+    var strokeFont = new g.DynamicFont({
+      game: scene.game,
+      fontFamily: g.FontFamily.Serif,
+      fontColor: &quot;red&quot;,
+      strokeColor: &quot;black&quot;,
+      strokeWidth: 2,
+      size: 40
+    });
+
+    var rubyFontLabel = new Label({
+      scene: scene,
+      text: &#39;{&quot;rt&quot;:&quot;るび&quot;,&quot;rb&quot;:&quot;ruby&quot;}フォント&#39;, // 記法に従ってルビを記述
+      font: font,
+      fontSize: 40,
+      rubyOptions: {
+        // ルビ描画オプション
+        rubyFont: strokeFont, // ルビ用のフォント
+        rubyFontSize: 30 // ルビのフォントサイズ
+      },
+      width: g.game.width,
+      x: 410,
+      y: 90
+    });
+    scene.append(rubyFontLabel);
+
+    /** ルビを含む改行 */
+    var rubyNewLineLabel = new Label({
+      scene: scene,
+      text: &#39;{&quot;rt&quot;:&quot;るびもじ&quot;,&quot;rb&quot;:&quot;ルビ文字&quot;}を{&quot;rt&quot;:&quot;かいぎょう&quot;,&quot;rb&quot;:&quot;改行&quot;}する&#39;, // ルビを壊さないよう改行位置がレイアウトされる
+      font: font,
+      fontSize: 40,
+      width: 100,
+      x: 410,
+      y: 210
+    });
+    scene.append(rubyNewLineLabel);
+  });
+
+  g.game.pushScene(scene);
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
