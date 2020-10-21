@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <base href=".." />
-    <title>ソフトウェアキーボード - Akashicサンプルカタログ</title>
+    <title>collision-js によるヒット判定 - Akashicサンプルカタログ</title>
     <link rel="stylesheet" href="./css/github-markdown.min.css" />
     <link rel="stylesheet" href="./css/highlight.min.css" />
     <link rel="stylesheet" href="./css/bootstrap.min.css" />
@@ -48,21 +48,42 @@
     </nav>
     <div class="container-xl mt-4">
       <div class="markdown-body">
-        <h1>ソフトウェアキーボード</h1><p>放送画面にキーボードを出すプログラムです。
-ゲームに組み込むことで文字を入力できるようになります。</p>
-<p>(2020/10/21) 扱いやすいようにキー画像をひとつの画像にまとめるように変更しました。</p>
+        <h1>collision-js によるヒット判定</h1><p>collision-js は算術ライブラリを含むコリジョンライブラリです。
+collision-js を利用すると矩形や円といったシェイプ同士が重なっているかどうかを判定できます。</p>
+<p>青い物体をドラッグして移動することができます。緑の物体と重なると色が赤く変わります。
+右上の <code>三</code> ボタンを押下すると交差判定するシェイプの組み合わせを選択することができます。</p>
 <div class="embed-responsive embed-responsive-16by9 border mx-auto">
-  <iframe class="embed-responsive-item" src="game/software-keyboard/export/index.html"></iframe>
+  <iframe class="embed-responsive-item" src="basic/collision-js/export/index.html"></iframe>
 </div>
 
 <div class="text-center my-3">
-  <a class="btn btn-danger bg-danger text-white" href="game/software-keyboard/software-keyboard.zip" download="software-keyboard.zip">ダウンロード</a>
+  <a class="btn btn-danger bg-danger text-white" href="basic/collision-js/collision-js.zip" download="collision-js.zip">ダウンロード</a>
 </div>
 
-<h1>動かし方</h1><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<h2>動かし方</h2><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
 <pre><code class="language-sh">npm install
-npm run build
-akashic-sandbox</code></pre>
+akashic-sandbox .</code></pre>
+<h2>機能</h2><p><a href="https://github.com/akashic-games/collision-js">collision-js</a>には以下の機能があります。</p>
+<ul>
+<li>コリジョン<ul>
+<li>以下のシェイプ間の交差判定。<ul>
+<li>点</li>
+<li>円</li>
+<li>有向ボックス</li>
+<li>軸平行ボックス</li>
+<li>直線</li>
+<li>線分</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>算術<ul>
+<li>２次元と３次元のベクトル。</li>
+<li>２行２列と３行３列の行列。</li>
+</ul>
+</li>
+</ul>
+<p>詳しくは<a href="https://akashic-games.github.io/reference/collision-js/index.html">API リファレンス</a>を参照ください。</p>
 
       </div>
     </div>
