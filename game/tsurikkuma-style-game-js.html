@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>つりっくま風ゲーム (JavaScript) - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>つりっくま風ゲーム (JavaScript)</h1><p>画面をタップして魚を釣りましょう。改造するとオリジナルのゲームが作れます。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="game/tsurikkuma-style-game-js/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="game/tsurikkuma-style-game-js/tsurikkuma-style-game-js.zip" download="tsurikkuma-style-game-js.zip">ダウンロード</a>
+</div>
+
+<h1>動かし方</h1><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox</code></pre>
+<h1>ソースコード</h1><h2>main</h2><p>最初に実行されるコードです。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+var Timeline = require(&quot;@akashic-extension/akashic-timeline&quot;).Timeline;
+var getResources = require(&quot;./Resources&quot;).getResources;
+var setResources = require(&quot;./Resources&quot;).setResources;
+var Constants = require(&quot;./constants&quot;);
+var Sea = require(&quot;./entity/Sea&quot;).Sea;
+var FishingRod = require(&quot;./entity/FishingRod&quot;).FishingRod;
+var HUDManager = require(&quot;./HUDManager&quot;).HUDManager;
+
+/**
+ * ゲームクラス
+ */
+function TsurikkumaStyleGame(scene) {
+  this.scene = scene;
+  this.root = new g.E({ scene: scene });
+  this.scene.append(this.root);
+  createStage(this.root);
+  createBear(this.root);
+  this.sea = createSea(this.root);
+  this.fishingRod = createFishingRod(this.root);
+  this.hudManager = createHUDManager(this.root);
+}
+
+/**
+ * ゲームを開始する
+ */
+TsurikkumaStyleGame.prototype.start = function() {
+  this.hudManager.startCountdown(
+    function() {
+      this._startGame();
+    }.bind(this)
+  );
+};
+
+/**
+ * ゲームを1フレーム進める
+ */
+TsurikkumaStyleGame.prototype.step = function() {
+  if (!this.isPlaying) return;
+  this.sea.checkFishOnHook(this.fishingRod);
+  this.hudManager.updateTime();
+  if (this.hudManager.getNowTime() &lt;= 0) {
+    // ゲーム終了
+    this.isPlaying = false;
+    this._finishGame();
+  }
+};
+
+/**
+ * タップしたときの処理
+ */
+TsurikkumaStyleGame.prototype.onPointDown = function() {
+  if (!this.isPlaying) return;
+  this.fishingRod.catchUp(
+    function() {
+      var pattern = this.fishingRod.getFishingPattern(this.sea.capturedFishList);
+      this.hudManager.addScore(this.hudManager.calcScore(this.sea.capturedFishList));
+      this.fishingRod.fishing(pattern);
+      this.sea.destroyCapturedFish();
+    }.bind(this)
+  );
+};
+
+/**
+ * ゲーム本編開始
+ */
+TsurikkumaStyleGame.prototype._startGame = function() {
+  this.isPlaying = true;
+  this.sea.startFishTimer();
+};
+
+/**
+ * ゲーム終了時の処理
+ */
+TsurikkumaStyleGame.prototype._finishGame = function() {
+  this.scene.pointUpCapture.removeAll();
+  this.sea.clearFishTimer();
+  this.hudManager.showTimeUp();
+  if (getResources().param.isAtsumaru) {
+    var boardId = 1;
+    window.RPGAtsumaru.experimental.scoreboards.setRecord(boardId, g.game.vars.gameState.score).then(function() {
+      window.RPGAtsumaru.experimental.scoreboards.display(boardId);
+    });
+  }
+};
+
+function main(param) {
+  var scene = new g.Scene({ game: g.game });
+  var timeLimit = Constants.TIMELIMIT;
+  if (param.sessionParameter.totalTimeLimit) {
+    /*
+     * セッションパラメータで制限時間が指定されたらその値を使用します
+     * 制限時間の 10 秒ほど前にはゲーム上の演出が完了するようにします
+     */
+    timeLimit = Math.max(param.sessionParameter.totalTimeLimit - 10, 1);
+  }
+  setResources({
+    timeline: new Timeline(scene),
+    font: createFont(),
+    timeLimit: timeLimit,
+    param: param
+  });
+  var tsurikkumaStyleGame = new TsurikkumaStyleGame(scene);
+  scene.loaded.add(function() {
+    tsurikkumaStyleGame.start();
+  });
+  scene.update.add(function() {
+    tsurikkumaStyleGame.step();
+  });
+  scene.pointDownCapture.add(function() {
+    tsurikkumaStyleGame.onPointDown();
+  });
+  g.game.pushScene(scene);
+}
+exports.main = main;
+
+/**
+ * フォントを作成
+ */
+function createFont() {
+  return new g.DynamicFont({
+    game: g.game,
+    fontFamily: Constants.FONT_FAMILY,
+    size: Constants.FONT_SIZE
+  });
+}
+
+/**
+ * 背景を作成
+ */
+function createStage(parent) {
+  /**
+   * 背景 (空と海)
+   */
+  new g.FilledRect({
+    scene: parent.scene,
+    cssColor: Constants.BACKGROUND_COLOR,
+    width: g.game.width,
+    height: g.game.height,
+    opacity: Constants.BACKGROUND_ALPHA,
+    parent: parent
+  });
+
+  /**
+   * 島
+   */
+  new g.FilledRect({
+    scene: parent.scene,
+    cssColor: Constants.ISLAND_COLOR,
+    width: Constants.ISLAND_SIZE.width,
+    height: Constants.ISLAND_SIZE.height,
+    x: Constants.ISLAND_POS.x,
+    y: Constants.ISLAND_POS.y,
+    parent: parent
+  });
+
+  /**
+   * 草
+   */
+  new g.FilledRect({
+    scene: parent.scene,
+    cssColor: Constants.GRASS_COLOR,
+    width: Constants.GRASS_SIZE.width,
+    height: Constants.GRASS_SIZE.height,
+    x: Constants.GRASS_POS.x,
+    y: Constants.GRASS_POS.y,
+    parent: parent
+  });
+
+  /**
+   * 水面
+   */
+  new g.FilledRect({
+    scene: parent.scene,
+    cssColor: Constants.WATERSURFACE_COLOR,
+    width: g.game.width,
+    height: 3,
+    x: Constants.WATERSURFACE_POS.x,
+    y: Constants.WATERSURFACE_POS.y,
+    parent: parent
+  });
+}
+
+/**
+ * くまを作成
+ */
+function createBear(parent) {
+  new g.FilledRect({
+    scene: parent.scene,
+    cssColor: Constants.BEAR_COLOR,
+    width: Constants.BEAR_SIZE.width,
+    height: Constants.BEAR_SIZE.height,
+    x: Constants.BEAR_POS.x,
+    y: Constants.BEAR_POS.y,
+    parent: parent
+  });
+}
+
+/**
+ * 海を作成
+ */
+function createSea(parent) {
+  return new Sea({ parent: parent });
+}
+
+/**
+ * 釣竿を作成
+ */
+function createFishingRod(parent) {
+  // 釣り針
+  var fishingRod = new FishingRod({ parent: parent });
+  fishingRod.onStuck.add(function() {
+    createMissLabel(parent);
+  });
+  return fishingRod;
+}
+
+/**
+ * HUDマネージャーを作成
+ */
+function createHUDManager(parent) {
+  var hudManager = new HUDManager({
+    scoreLabel: createScoreLabel(parent),
+    timeLabel: createTimeLabel(parent),
+    systemLabel: createSystemLabel(parent)
+  });
+  hudManager.setScore(0);
+  hudManager.setTimeLimit(getResources().timeLimit);
+  return hudManager;
+}
+
+/**
+ * スコアラベルを作成
+ */
+function createScoreLabel(parent) {
+  return new g.Label({
+    scene: parent.scene,
+    text: &quot;&quot;,
+    font: getResources().font,
+    fontSize: Constants.FONT_SIZE,
+    width: g.game.width - 10,
+    y: 5,
+    textAlign: g.TextAlign.Right,
+    widthAutoAdjust: false,
+    parent: parent
+  });
+}
+
+/**
+ * 制限時間ラベルを作成
+ */
+function createTimeLabel(parent) {
+  return new g.Label({
+    scene: parent.scene,
+    text: &quot;&quot;,
+    font: getResources().font,
+    fontSize: Constants.FONT_SIZE,
+    width: g.game.width - 220,
+    y: 5,
+    textAlign: g.TextAlign.Right,
+    widthAutoAdjust: false,
+    parent: parent
+  });
+}
+
+/**
+ *  システムラベルを作成
+ */
+function createSystemLabel(parent) {
+  return new g.Label({
+    scene: parent.scene,
+    text: &quot;3&quot;,
+    font: getResources().font,
+    fontSize: Constants.FONT_SIZE * 2,
+    x: g.game.width / 2,
+    y: g.game.height / 2,
+    anchorX: 0.5,
+    anchorY: 0.5,
+    parent: parent
+  });
+}
+
+/**
+ * 釣りミス時のラベルを作成
+ */
+function createMissLabel(parent) {
+  var missLabel = new g.Label({
+    scene: parent.scene,
+    text: &quot;miss!&quot;,
+    textColor: &quot;red&quot;,
+    font: getResources().font,
+    fontSize: Math.floor(Constants.FONT_SIZE / 2),
+    x: Constants.BEAR_POS.x + Constants.BEAR_SIZE.width * 2,
+    y: Constants.BEAR_POS.y,
+    parent: parent
+  });
+  getResources()
+    .timeline.create(missLabel)
+    .wait(Constants.STUCK_DURATION)
+    .call(function() {
+      missLabel.destroy();
+    });
+}</code></pre>
+<h2>constants</h2><p><code>constants.js</code> にはゲームで利用する定数がまとめられています。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+//
+// ゲーム定数
+//
+
+/**
+ * 制限時間(セッションパラメータで制限時間が指定されたらその値を使用します)
+ */
+exports.TIMELIMIT = 30;
+
+/**
+ * フォントサイズ
+ */
+exports.FONT_SIZE = 36;
+
+/**
+ * フォントファミリー
+ */
+exports.FONT_FAMILY = g.FontFamily.SansSerif;
+
+/**
+ * 背景の色
+ */
+exports.BACKGROUND_COLOR = &quot;#3fa7ff&quot;;
+
+/**
+ * 背景の透過度
+ */
+exports.BACKGROUND_ALPHA = 0.8;
+
+/**
+ * 島の色
+ */
+exports.ISLAND_COLOR = &quot;#ffeca8&quot;;
+
+/**
+ * 島の大きさ
+ */
+exports.ISLAND_SIZE = { width: 200, height: 80 };
+
+/**
+ * 島の座標
+ */
+exports.ISLAND_POS = { x: 0, y: g.game.height * 0.5 - exports.ISLAND_SIZE.height };
+
+/**
+ * 草の色
+ */
+exports.GRASS_COLOR = &quot;#549637&quot;;
+
+/**
+ * 草の大きさ
+ */
+exports.GRASS_SIZE = { width: exports.ISLAND_SIZE.width - 40, height: exports.ISLAND_SIZE.height / 2 };
+
+/**
+ * 草の座標
+ */
+exports.GRASS_POS = { x: 0, y: exports.ISLAND_POS.y - 20 };
+
+/**
+ * 水面の高さ
+ */
+exports.WATERSURFACE_POS = { x: 0, y: g.game.height * 0.4 };
+
+/**
+ * 水面の色
+ */
+exports.WATERSURFACE_COLOR = &quot;#252525&quot;;
+
+/**
+ * くまの色
+ */
+exports.BEAR_COLOR = &quot;white&quot;;
+
+/**
+ * くまの大きさ
+ */
+exports.BEAR_SIZE = { width: 50, height: 65 };
+
+/**
+ * くまの座標
+ */
+exports.BEAR_POS = { x: 100, y: exports.GRASS_POS.y - exports.BEAR_SIZE.height / 2 };
+
+/**
+ * 魚のサイズ（横幅は魚の名前の長さに依存
+ */
+exports.FISH_FONT_SIZE = 36;
+
+/**
+ * 魚の生成間隔[ミリ秒]
+ */
+exports.FISH_INTERVAL = 2000;
+
+/**
+ * 魚が泳ぐ時間範囲[ミリ秒]
+ */
+exports.SWIMMING_TIME_RANGE = { min: 5000, max: 10000 };
+
+/**
+ * 釣り竿の色
+ */
+exports.ROD_COLOR = &quot;#835031&quot;;
+
+/**
+ * 釣り竿の大きさ
+ */
+exports.ROD_SIZE = { width: 3, height: 100 };
+
+/**
+ * 釣り竿の座標
+ */
+exports.ROD_POS = { x: 155, y: 50 };
+
+/**
+ * 釣り竿の角度
+ */
+exports.ROD_ANGLE = 30;
+
+/**
+ * 釣り糸の色
+ */
+exports.ROD_STRING_COLOR = &quot;#252525&quot;;
+
+/**
+ * 釣り糸の大きさ
+ */
+exports.ROD_STRING_SIZE = { width: 3, height: 280 };
+
+/**
+ * 釣り糸の座標
+ */
+exports.ROD_STRING_POS = { x: 180, y: exports.ROD_POS.y + 8 };
+
+/**
+ * 釣り上げ時の釣り糸の長さ
+ */
+exports.ROD_STRING_HEIGHT_WHEN_UP = exports.ROD_STRING_SIZE.height / 5;
+
+/**
+ * 釣り針の色
+ */
+exports.HOOK_COLOR = &quot;#525252&quot;;
+
+/**
+ * 釣り針の大きさ
+ */
+exports.HOOK_SIZE = { width: exports.FISH_FONT_SIZE, height: exports.FISH_FONT_SIZE };
+
+/**
+ * 釣り針の座標
+ */
+exports.HOOK_POS = { x: exports.ROD_STRING_POS.x - 30, y: exports.ROD_POS.y + exports.ROD_STRING_SIZE.height };
+
+/**
+ * 釣り上げ時の釣り針の高さ
+ */
+exports.HOOK_POS_WHEN_UP = { x: exports.HOOK_POS.x, y: exports.HOOK_POS.y / 4 };
+
+/**
+ * スコアラベルフォーマット
+ */
+exports.SCORE_LABEL_FORMAT = &quot;SCORE:&quot;;
+
+/**
+ * 制限時間ラベルのフォーマット
+ */
+exports.TIME_LABEL_FORMAT = &quot;TIME:&quot;;
+
+/**
+ * 釣りに要する時間[ミリ秒]
+ */
+exports.FISHING_DURATION = 1000;
+
+/**
+ * 釣り待機時間[ミリ秒]
+ */
+exports.FISHING_WAIT_DURATION = 300;
+
+/**
+ * スタック時間[ミリ秒]
+ */
+exports.STUCK_DURATION = 2000;</code></pre>
+<h2>Sea</h2><p><code>Sea.js</code> には</p>
+<ul>
+<li>出現する魚の管理</li>
+<li>一定間隔で魚を生成する処理</li>
+<li>生成した魚の管理</li>
+<li>魚と釣り針の当たり判定</li>
+</ul>
+<p>が実装されています。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+var Fish = require(&quot;./Fish&quot;).Fish;
+var Constants = require(&quot;../constants&quot;);
+
+/**
+ * 出現する魚の種類
+ */
+var fishInfoList = [
+  { name: &quot;さかな&quot;, score: 1 },
+  { name: &quot;くらげ&quot;, score: 0 }
+];
+
+/**
+ * 海クラス
+ */
+function Sea(param) {
+  this.capturedFishList = [];
+  this._parent = param.parent;
+  this._fishList = [];
+}
+
+/**
+ * 定期的に魚を作成する
+ */
+Sea.prototype.startFishTimer = function() {
+  var that = this;
+  this._fishTimerIdentifier = this._parent.scene.setInterval(function() {
+    var fish = that._createRandomFish(that._parent);
+    fish.swim();
+    that._fishList.push(fish);
+  }, Constants.FISH_INTERVAL);
+};
+
+/**
+ * タイマーをクリアする
+ */
+Sea.prototype.clearFishTimer = function() {
+  if (!this._fishTimerIdentifier) return;
+  this._parent.scene.clearInterval(this._fishTimerIdentifier);
+  this._fishTimerIdentifier = null;
+};
+
+/**
+ * 釣り針と魚の当たり判定をチェックする
+ */
+Sea.prototype.checkFishOnHook = function(fishingRod) {
+  var that = this;
+  if (!this._fishList.length) return;
+  if (!fishingRod._isCatching) return;
+  this._fishList.forEach(function(fish) {
+    // 釣り針と魚が当たっていた場合は釣り上げる
+    if (g.Collision.intersectAreas(fishingRod.getHookArea(), fish.getArea())) {
+      if (fish._isCaptured) return;
+      fish.stop();
+      fish.followHook(fishingRod);
+      that._fishList = that._fishList.filter(function(item) {
+        return item !== fish;
+      });
+      that.capturedFishList.push(fish);
+    }
+  });
+};
+
+/**
+ * 捕まえた魚たちを destroy する
+ */
+Sea.prototype.destroyCapturedFish = function() {
+  this.capturedFishList.forEach(function(capturedFish) {
+    return capturedFish.destroy();
+  });
+  this.capturedFishList = [];
+};
+
+/**
+ * ランダムな魚を作成
+ */
+Sea.prototype._createRandomFish = function(parent) {
+  // 作成する魚の種類
+  var fishIdx = g.game.random.get(0, fishInfoList.length - 1);
+  // 魚の泳ぎ方のパターン
+  var pattern = g.game.random.get(0, 1) ? &quot;right_to_left&quot; : &quot;left_to_right&quot;;
+  // 魚が泳ぐ水深
+  var depth = Constants.WATERSURFACE_POS.y + Constants.FISH_FONT_SIZE * g.game.random.get(0, 4);
+  // 魚が泳ぐ時間
+  var swimTime = g.game.random.get(Constants.SWIMMING_TIME_RANGE.min, Constants.SWIMMING_TIME_RANGE.max);
+  return new Fish({
+    parent: parent,
+    name: fishInfoList[fishIdx].name,
+    score: fishInfoList[fishIdx].score,
+    swimmingStyle: {
+      pattern: pattern,
+      depth: depth,
+      swimTime: swimTime
+    }
+  });
+};
+
+exports.Sea = Sea;</code></pre>
+<h2>Fish</h2><p><code>Fish.js</code> には</p>
+<ul>
+<li>魚の描画</li>
+<li>泳ぐアニメーション</li>
+<li>釣られるアニメーション</li>
+</ul>
+<p>が実装されています。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+var getResources = require(&quot;../Resources&quot;).getResources;
+var Constants = require(&quot;../constants&quot;);
+
+/**
+ * 魚クラス
+ */
+function Fish(param) {
+  // 泳ぐアニメーション用の Tween
+  this._swimTween = null;
+  this._parent = param.parent;
+  this._label = this._createLabel(param);
+  this._parent.append(this._label);
+  this._isCaptured = false;
+  this._score = param.score;
+  this._swimmingStyle = param.swimmingStyle;
+}
+
+Fish.prototype.getName = function() {
+  return this._label.text;
+};
+
+Fish.prototype.getScore = function() {
+  return this._score;
+};
+
+Fish.prototype.getArea = function() {
+  return {
+    width: this._label.width,
+    height: this._label.height,
+    x: this._label.x,
+    y: this._label.y
+  };
+};
+
+Fish.prototype.destroy = function() {
+  this._label.destroy();
+};
+
+/**
+ * 釣られる
+ */
+Fish.prototype.followHook = function(fishingRod) {
+  var that = this;
+  this._label.update.add(function() {
+    that._label.y = Math.min(fishingRod.getHookArea().y, that._label.y);
+    that._label.modified();
+  });
+};
+
+/**
+ * 泳ぐ
+ */
+Fish.prototype.swim = function() {
+  var that = this;
+  var timeline = getResources().timeline;
+  var toX = this._label.x &lt; g.game.width / 2 ? g.game.width : -this._label.width;
+  if (this._swimTween) {
+    timeline.remove(this._swimTween);
+  }
+  this._swimTween = timeline
+    .create(this._label)
+    .moveTo(toX, this._label.y, this._swimmingStyle.swimTime)
+    .call(function() {
+      return that._label.destroy();
+    });
+};
+
+/**
+ * 泳ぎをやめる
+ */
+Fish.prototype.stop = function() {
+  this._isCaptured = true;
+  if (this._swimTween) {
+    getResources().timeline.remove(this._swimTween);
+    this._swimTween = null;
+  }
+};
+
+/**
+ * 魚ラベル作成
+ */
+Fish.prototype._createLabel = function(param) {
+  var initPos = this._initialPos(param);
+  return new g.Label({
+    scene: param.parent.scene,
+    text: param.name,
+    font: getResources().font,
+    fontSize: Constants.FISH_FONT_SIZE,
+    x: initPos.x,
+    y: initPos.y
+  });
+};
+
+/**
+ * 初期位置生成
+ */
+Fish.prototype._initialPos = function(param) {
+  switch (param.swimmingStyle.pattern) {
+    case &quot;left_to_right&quot;:
+      return { x: -Constants.FISH_FONT_SIZE, y: param.swimmingStyle.depth };
+    case &quot;right_to_left&quot;:
+      return { x: g.game.width, y: param.swimmingStyle.depth };
+  }
+};
+
+exports.Fish = Fish;</code></pre>
+<h2>FishingRod</h2><p><code>FishingRod.js</code> には</p>
+<ul>
+<li>釣り竿の描画</li>
+<li>釣るアニメーション</li>
+</ul>
+<p>が実装されています。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+var getResources = require(&quot;../Resources&quot;).getResources;
+var Constants = require(&quot;../constants&quot;);
+
+/**
+ * 釣り竿クラス
+ */
+function FishingRod(param) {
+  /**
+   * スタック時のトリガー
+   */
+  this.onStuck = new g.Trigger();
+  this._parent = param.parent;
+  this._isCatching = false;
+  this._isFishing = false;
+  this._createRod();
+  this._createRodString();
+  this._createHook();
+}
+
+FishingRod.prototype.getHookArea = function() {
+  return {
+    width: this._hook.width,
+    height: this._hook.height,
+    x: this._hook.x,
+    y: this._hook.y
+  };
+};
+
+/**
+ * 釣り上げる
+ */
+FishingRod.prototype.catchUp = function(finished) {
+  var that = this;
+  var timeline = getResources().timeline;
+
+  if (this._isFishing || this._isCatching) return;
+  this._isCatching = true;
+  this._isFishing = true;
+
+  timeline
+    .create(this._rodString)
+    .to({ height: Constants.ROD_STRING_HEIGHT_WHEN_UP }, Constants.FISHING_DURATION)
+    .wait(Constants.FISHING_WAIT_DURATION);
+
+  timeline
+    .create(this._hook)
+    .moveTo(this._hook.x, Constants.HOOK_POS_WHEN_UP.y, Constants.FISHING_DURATION)
+    .wait(Constants.FISHING_WAIT_DURATION)
+    .call(function() {
+      that._isCatching = false;
+      finished();
+    });
+};
+
+/**
+ * 釣った魚からパターンを判定
+ */
+FishingRod.prototype.getFishingPattern = function(capturedFishList) {
+  var pattern = &quot;Default&quot;;
+  capturedFishList.forEach(function(fish) {
+    if (pattern !== &quot;Default&quot;) return;
+    switch (fish.getName()) {
+      case &quot;くらげ&quot;:
+        pattern = &quot;Stuck&quot;;
+        break;
+    }
+  });
+  return pattern;
+};
+
+/**
+ * パターンに従って釣りをする
+ */
+FishingRod.prototype.fishing = function(pattern) {
+  switch (pattern) {
+    case &quot;Default&quot;:
+      this._swingDown();
+      break;
+    case &quot;Stuck&quot;:
+      this._stuck();
+      break;
+  }
+};
+
+/**
+ * 振り下ろす
+ */
+FishingRod.prototype._swingDown = function() {
+  var that = this;
+  var timeline = getResources().timeline;
+
+  timeline.create(this._rodString).to({ height: Constants.ROD_STRING_SIZE.height }, Constants.FISHING_DURATION);
+
+  timeline
+    .create(this._hook)
+    .moveTo(this._hook.x, Constants.HOOK_POS.y, Constants.FISHING_DURATION)
+    .call(function() {
+      that._isFishing = false;
+    });
+};
+
+/**
+ * スタックさせる
+ */
+FishingRod.prototype._stuck = function() {
+  var that = this;
+  var timeline = getResources().timeline;
+
+  this.onStuck.fire();
+
+  // ${STUCK_DURATION} ミリ秒後に、スタックを解除し、釣竿を振り下ろす
+  timeline.create(this._rodString).wait(Constants.STUCK_DURATION);
+
+  timeline
+    .create(this._hook)
+    .wait(Constants.STUCK_DURATION)
+    .call(function() {
+      that._swingDown();
+    });
+};
+
+/**
+ * 釣竿を作成する
+ */
+FishingRod.prototype._createRod = function() {
+  new g.FilledRect({
+    scene: this._parent.scene,
+    cssColor: Constants.ROD_COLOR,
+    width: Constants.ROD_SIZE.width,
+    height: Constants.ROD_SIZE.height,
+    x: Constants.ROD_POS.x,
+    y: Constants.ROD_POS.y,
+    angle: Constants.ROD_ANGLE,
+    parent: this._parent
+  });
+};
+
+/**
+ * 釣り糸を作成する
+ */
+FishingRod.prototype._createRodString = function() {
+  this._rodString = new g.FilledRect({
+    scene: this._parent.scene,
+    cssColor: Constants.ROD_STRING_COLOR,
+    width: Constants.ROD_STRING_SIZE.width,
+    height: Constants.ROD_STRING_SIZE.height,
+    x: Constants.ROD_STRING_POS.x,
+    y: Constants.ROD_STRING_POS.y,
+    parent: this._parent
+  });
+};
+
+/**
+ * 釣り針を作成する
+ */
+FishingRod.prototype._createHook = function() {
+  var scene = this._parent.scene;
+
+  this._hook = new g.E({
+    scene: scene,
+    width: Constants.HOOK_SIZE.width,
+    height: Constants.HOOK_SIZE.height,
+    x: Constants.HOOK_POS.x,
+    y: Constants.HOOK_POS.y,
+    parent: this._parent
+  });
+
+  new g.FilledRect({
+    scene: scene,
+    cssColor: Constants.HOOK_COLOR,
+    width: 10,
+    height: this._hook.height,
+    x: this._hook.width - 10,
+    parent: this._hook
+  });
+
+  new g.FilledRect({
+    scene: scene,
+    cssColor: Constants.HOOK_COLOR,
+    width: this._hook.width,
+    height: 10,
+    y: this._hook.height - 10,
+    parent: this._hook
+  });
+
+  new g.FilledRect({
+    scene: scene,
+    cssColor: Constants.HOOK_COLOR,
+    width: 10,
+    height: 20,
+    y: this._hook.height - 20,
+    parent: this._hook
+  });
+};
+
+exports.FishingRod = FishingRod;</code></pre>
+<h2>HUDManager</h2><p><code>HUDManager.js</code> には</p>
+<ul>
+<li>スコアの表示と管理</li>
+<li>制限時間の表示と管理</li>
+</ul>
+<p>が実装されています。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+var getResources = require(&quot;./Resources&quot;).getResources;
+var Constants = require(&quot;./constants&quot;);
+
+/**
+ * HUDマネージャークラス
+ * スコア、制限時間、システム文言などの管理を行います
+ */
+function HUDManager(param) {
+  this._scoreLabel = param.scoreLabel;
+  this._timeLabel = param.timeLabel;
+  this._systemLabel = param.systemLabel;
+  this._timeLimit = Constants.TIMELIMIT;
+}
+
+// ----------
+// スコア関係
+// ----------
+
+/**
+ * スコアをセットする
+ */
+HUDManager.prototype.setScore = function(score) {
+  score = Math.min(score, 99999);
+
+  var scoreText = Constants.SCORE_LABEL_FORMAT + (&quot;&quot; + score);
+  this._scoreLabel.text = scoreText;
+  this._scoreLabel.invalidate();
+
+  if (!g.game.vars.gameState) {
+    g.game.vars.gameState = {};
+  }
+  g.game.vars.gameState.score = score;
+};
+
+/**
+ * 現時点のスコアを得る
+ */
+HUDManager.prototype.getScore = function() {
+  if (!g.game.vars.gameState) {
+    return 0;
+  }
+  return g.game.vars.gameState.score;
+};
+
+/**
+ * スコアの加算
+ */
+HUDManager.prototype.addScore = function(score) {
+  this.setScore(this.getScore() + score);
+};
+
+/**
+ * 釣った魚からスコアを計算
+ */
+HUDManager.prototype.calcScore = function(capturedFishList) {
+  if (
+    capturedFishList.some(function(fish) {
+      return fish.getScore() === 0;
+    })
+  ) {
+    return 0;
+  }
+
+  return capturedFishList.reduce(function(score, fish) {
+    return (score += fish.getScore());
+  }, 0);
+};
+
+// ----------
+// 制限時間関係
+// ----------
+
+/**
+ * 制限時間をセットする
+ */
+HUDManager.prototype.setTimeLimit = function(timeLimit) {
+  this._timeLimit = Math.max(timeLimit, 1);
+  var timeLimitText = Constants.TIME_LABEL_FORMAT + (&quot;&quot; + timeLimit);
+  if (this._timeLabel.text !== timeLimitText) {
+    this._timeLabel.text = timeLimitText;
+    this._timeLabel.invalidate();
+  }
+};
+
+/**
+ * 現時点の残り制限時間を得る
+ */
+HUDManager.prototype.getNowTime = function() {
+  if (this._timeLimit &lt; 0) {
+    return 0;
+  }
+  return this._timeLimit;
+};
+
+/**
+ * 残り制限時間を更新
+ */
+HUDManager.prototype.updateTime = function() {
+  var now = Math.max(Math.floor(this._timeLimit), 0);
+  var nowTimeText = Constants.TIME_LABEL_FORMAT + (&quot;&quot; + now);
+  if (this._timeLabel.text !== nowTimeText) {
+    this._timeLabel.text = nowTimeText;
+    this._timeLabel.invalidate();
+  }
+  this._timeLimit -= 1 / g.game.fps;
+};
+
+// ----------
+// システムラベル関係
+// ----------
+
+/**
+ * スタート時のカウントダウン開始
+ */
+HUDManager.prototype.startCountdown = function(finished) {
+  var that = this;
+  var timeline = getResources().timeline;
+
+  timeline
+    .create(this._systemLabel, {
+      modified: function() {
+        return that._systemLabel.invalidate();
+      }
+    })
+    .wait(1000)
+    .call(function() {
+      return (that._systemLabel.text = &quot;2&quot;);
+    })
+    .wait(1000)
+    .call(function() {
+      return (that._systemLabel.text = &quot;1&quot;);
+    })
+    .wait(1000)
+    .call(function() {
+      return (that._systemLabel.text = &quot;Start!&quot;);
+    })
+    .wait(500)
+    .fadeOut(500)
+    .call(function() {
+      return finished();
+    });
+};
+
+/**
+ * 終了時のシステム文言表示
+ */
+HUDManager.prototype.showTimeUp = function() {
+  this._systemLabel.text = &quot;TIME UP!&quot;;
+  this._systemLabel.opacity = 1.0;
+  this._systemLabel.invalidate();
+};
+
+exports.HUDManager = HUDManager;</code></pre>
+<h2>Resources</h2><p><code>Resources.js</code> はゲーム全体で利用するリソースを <code>g.game.vars</code> に保存する補助関数です。</p>
+<pre><code class="language-javascript">&quot;use strict&quot;;
+
+function getResources() {
+  return g.game.vars.resouces;
+}
+
+function setResources(resouces) {
+  g.game.vars.resouces = resouces;
+}
+
+exports.getResources = getResources;
+exports.setResources = setResources;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

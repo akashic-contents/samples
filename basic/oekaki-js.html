@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <base href=".." />
+    <title>おえかき (JavaScript) - Akashicサンプルカタログ</title>
+    <link rel="stylesheet" href="./css/github-markdown.min.css" />
+    <link rel="stylesheet" href="./css/highlight.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <style>
+      .markdown-body .embed-responsive {
+        max-width: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+      <div class="container-xl">
+        
+        <a class="navbar-brand" href="index.html">Akashicサンプルカタログ</a>
+        
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          data-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+              
+            <li class="nav-item">
+              <a class="nav-link" href="./index.html">ホーム</a>
+            </li>
+              
+            <li class="nav-item">
+              <a class="nav-link" href="https://akashic-games.github.io/">Akashic Engine 公式</a>
+            </li>
+             
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div class="container-xl mt-4">
+      <div class="markdown-body">
+        <h1>おえかき (JavaScript)</h1><p>画面内をマウスや指で画面をなぞると線を書けます。</p>
+<div class="embed-responsive embed-responsive-16by9 border mx-auto">
+  <iframe class="embed-responsive-item" src="basic/oekaki-js/export/index.html"></iframe>
+</div>
+
+<div class="text-center my-3">
+  <a class="btn btn-danger bg-danger text-white" href="basic/oekaki-js/oekaki-js.zip" download="oekaki-js.zip">ダウンロード</a>
+</div>
+
+<h1>動かし方</h1><p>ダウンロードした zip ファイルを解凍して以下のコマンドを実行してください。</p>
+<pre><code class="language-sh">npm install
+akashic-sandbox .</code></pre>
+<h2>ソースコード</h2><pre><code class="language-javascript">&quot;use strict&quot;;
+
+/**
+ * ペンの太さ
+ */
+var LINE_WIDTH = 3;
+
+/**
+ * ペンの色
+ */
+var LINE_COLOR = &quot;black&quot;;
+
+function main() {
+  var scene = new g.Scene({ game: g.game });
+  scene.loaded.add(function() {
+    var pointers = {};
+
+    scene.pointDownCapture.add(function(ev) {
+      var buffer = new g.E({ scene: scene, x: ev.point.x, y: ev.point.y });
+      pointers[ev.pointerId] = buffer;
+      scene.append(buffer);
+      var dot = createDot({ x: 0, y: 0 });
+      buffer.append(dot);
+    });
+
+    scene.pointMoveCapture.add(function(ev) {
+      draw(ev);
+    });
+
+    scene.pointUpCapture.add(function(ev) {
+      draw(ev);
+      scene.append(convertToSprite(pointers[ev.pointerId]));
+      pointers[ev.pointerId].remove();
+      pointers[ev.pointerId].destroy();
+      delete pointers[ev.pointerId];
+    });
+
+    /**
+     * ドットを生成
+     */
+    function createDot(p) {
+      return new g.FilledRect({
+        scene: scene,
+        cssColor: LINE_COLOR,
+        width: LINE_WIDTH,
+        height: LINE_WIDTH,
+        x: p.x,
+        y: p.y,
+        anchorX: 0.5,
+        anchorY: 0.5
+      });
+    }
+
+    /**
+     * ドットで構成された線を描く
+     */
+    function draw(ev) {
+      var rad = Math.atan2(ev.prevDelta.y, ev.prevDelta.x);
+      var step = { x: Math.cos(rad), y: Math.sin(rad) };
+      var p = {
+        x: ev.startDelta.x - ev.prevDelta.x,
+        y: ev.startDelta.y - ev.prevDelta.y
+      };
+
+      var isFinish = function() {
+        return step.x * (p.x - ev.startDelta.x) &gt;= 0 &amp;&amp; step.y * (p.y - ev.startDelta.y) &gt;= 0;
+      };
+
+      while (!isFinish()) {
+        //  最後にpointDownが発生した座標とpointMoveが発生した座標の差分を単位ベクトル step 分ずらした dot で埋めていく
+        p.x += step.x;
+        p.y += step.y;
+        var dot = createDot({ x: p.x, y: p.y });
+        pointers[ev.pointerId].append(dot);
+      }
+    }
+
+    /**
+     * 線を g.Sprite に変換
+     */
+    function convertToSprite(target) {
+      var min = { x: 0, y: 0 };
+      var max = { x: 0, y: 0 };
+      target.children.forEach(function(c) {
+        min.x = Math.min(min.x, c.x);
+        min.y = Math.min(min.y, c.y);
+        max.x = Math.max(max.x, c.x);
+        max.y = Math.max(max.y, c.y);
+      });
+
+      // g.FillRectのアンチエイリアスがかかることを考慮し、マージンを設ける
+      var margin = LINE_WIDTH;
+      max.x += margin * 2;
+      max.y += margin * 2;
+      target.children.forEach(function(c) {
+        c.moveBy(-min.x + margin, -min.y + margin);
+        c.modified();
+      });
+      target.width = Math.ceil(max.x - min.x);
+      target.height = Math.ceil(max.y - min.y);
+      target.modified();
+
+      var sprite = g.Util.createSpriteFromE(scene, target);
+      // 変換後のspriteのアンカーポイントは中心ではない
+      sprite.moveTo(target.x + min.x - margin, target.y + min.y - margin);
+      sprite.modified();
+      return sprite;
+    }
+  });
+
+  g.game.pushScene(scene);
+}
+
+module.exports = main;</code></pre>
+
+      </div>
+    </div>
+    <div class="container-xl"></div>
+      <hr>
+      <p class="text-center">&copy; DWANGO Co., Ltd.</p>
+    </div>
+    <script src="./js/highlight.min.js"></script>
+    <script>
+      hljs.initHighlightingOnLoad();
+    </script>
+    <script src="./js/jquery.slim.min.js"></script>
+    <script src="./js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
